@@ -6,11 +6,9 @@ import serveIndex from 'serve-index';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('current dirname is ', __dirname);
-
 const app = express();
 const PORT = 8080;
-const ROOT = path.join(__dirname, '../../assets');
+const ROOT = path.join(__dirname, '../');
 
 app.use((_, res, next) => {
   res.append('Cross-Origin-Opener-Policy', 'same-origin');

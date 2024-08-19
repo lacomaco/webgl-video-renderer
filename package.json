@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prestart": "node download-assets.js",
+    "pre-download": "node download-ffmpeg.js",
     "build:frontend": "rollup -c",
     "build:backend": "tsc --project tsconfig.backend.json",
     "build": "npm run build:frontend && npm run build:backend",
@@ -24,6 +24,7 @@
     "express": "^4.19.2",
     "gl-matrix": "^3.4.3",
     "lodash-es": "^4.17.21",
+    "node-fetch": "^3.3.2",
     "serve-index": "^1.9.1",
     "tar": "^6.1.15"
   },
