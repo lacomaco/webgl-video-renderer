@@ -11,10 +11,10 @@ const PORT = 8080;
 const ROOT = path.join(__dirname, '../');
 
 app.use((_, res, next) => {
-  res.append('Cross-Origin-Opener-Policy', 'same-origin');
-  res.append('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.header('Access-Control-Allow-Origin', '*'); // 모든 도메인 허용
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
-});
+}); 
 
 app.use(express.static(ROOT));
 app.use('/', serveIndex(ROOT, { icons: true }));
