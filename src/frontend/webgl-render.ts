@@ -3,8 +3,8 @@ import { VideoRenderer } from './video-render';
 
 export class WebGLRender{
     private gl: WebGL2RenderingContext | null = null;
-    width = 1600;
-    height = 900;
+    width = 600;
+    height = 800;
 
     // plane 정사각형
     data = [
@@ -39,11 +39,12 @@ void main(){
 }`;
     fs = `#version 300 es
 precision highp float;
+uniform sampler2D video;
 in vec2 TexCoords;
 out vec4 FragColor;
 
 void main(){
-    FragColor = vec4(TexCoords,0.0,1.0);
+    FragColor = texture(video,TexCoords);
 }`;
 
     commonProgram: WebGLProgram | null = null;
@@ -63,6 +64,28 @@ void main(){
         if(this.gl){
             this.videoRender.putGL(this.gl);
         }
+    }
+
+    render() {
+        if(!this.gl || !this.commonProgram){
+            return;
+        }
+
+        this.gl.clearColor(1.0,0.0,0.0,1.0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        this.gl.useProgram(this.commonProgram);
+        this.gl.bindVertexArray(this.vao);
+
+        const projectionLocation = this.gl.getUniformLocation(this.commonProgram, 'projection');
+        const viewLocation = this.gl.getUniformLocation(this.commonProgram, 'view');
+
+        this.gl.uniformMatrix4fv(projectionLocation, false, this.projection);
+        this.gl.uniformMatrix4fv(viewLocation, false, this.view);
+
+        this.videoRender.render(this.commonProgram);
+
+        requestAnimationFrame(this.render.bind(this));
     }
 
     private setUpWebGL(): void {
@@ -150,7 +173,7 @@ void main(){
 
     private createViewProjectionMatrix() {
         const viewMatrix = mat4.create();
-        mat4.lookAt(viewMatrix, [0,0,0.1], [0,0,0],[0,1,0]);
+        mat4.lookAt(viewMatrix, [0,0,2], [0,0,0],[0,1,0]);
         this.view = viewMatrix;
     }
 }

@@ -22,14 +22,12 @@ export class VideoRenderer {
             this.videoInput.addEventListener('change', this.onVideoInputChange.bind(this));
         }
 
-        this.videoElement.onloadedmetadata = () => {
+        this.videoElement.onloadeddata = () => {
             this.duration = this.videoElement.duration;
             this.videoWidth = this.videoElement.videoWidth;
-            this.videoHeight = this.videoElement.videoHeight;          
-        }
-
-        this.videoElement.onload = () => {
-            this.createVideoTexture();  
+            this.videoHeight = this.videoElement.videoHeight;
+            this.play();
+            this.createVideoTexture();
         }
     }
 
@@ -51,7 +49,7 @@ export class VideoRenderer {
             return;
         }
 
-        if(!this.texture){
+        if(this.texture){
             this.gl.deleteTexture(this.texture);
         }
 
@@ -62,7 +60,23 @@ export class VideoRenderer {
             return;
         }
 
+        this.updateTexture();
+        this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL,true);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D,null);
+    }
+
+    updateTexture() {
+        if(!this.gl || !this.texture){
+            return;
+        }
+
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+        this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL,true);
 
         this.gl.texImage2D(
             this.gl.TEXTURE_2D,
@@ -72,5 +86,37 @@ export class VideoRenderer {
             this.gl.UNSIGNED_BYTE,
             this.videoElement
         );
+    }
+
+    bindTexture(id=0,program: WebGLProgram) {
+        if(!this.gl || !this.texture){
+            return;
+        }
+
+        this.gl.activeTexture(this.gl.TEXTURE0 + id);
+        this.gl.bindTexture(this.gl.TEXTURE_2D,this.texture);
+        this.gl.uniform1i(
+            this.gl.getUniformLocation(program,'video'),id
+        );
+    }
+
+    play(){
+        this.videoElement.currentTime = 0;
+        this.videoElement.play();
+    }
+
+    pause(){
+        this.videoElement.pause();
+    }
+
+    render(program: WebGLProgram) {
+        if(!this.gl){
+            return;
+        }
+        this.updateTexture();
+        const modelLocation = this.gl.getUniformLocation(program, 'model');
+        this.gl.uniformMatrix4fv(modelLocation, false, this.model);
+        this.bindTexture(0,program);
+        this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     }
 }
