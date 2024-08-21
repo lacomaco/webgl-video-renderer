@@ -1,4 +1,5 @@
 import {mat4} from 'gl-matrix';
+import { AudioRender } from './audio-render';
 
 export class VideoRenderer {
     private file: undefined | File;
@@ -13,6 +14,7 @@ export class VideoRenderer {
 
     model = mat4.create();
     texture: WebGLTexture | null = null;
+    audioRender = new AudioRender();
 
     constructor() {
         this.videoInput = document.getElementById('uploader') as HTMLInputElement;
@@ -37,6 +39,7 @@ export class VideoRenderer {
             this.file = input.files[0];
 
             this.videoElement.src = URL.createObjectURL(this.file);
+            this.audioRender.putAudioSource(this.file);
         }
     }
 
