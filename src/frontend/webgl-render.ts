@@ -49,21 +49,24 @@ void main(){
 
     commonProgram: WebGLProgram | null = null;
     videoRender = new VideoRenderer();
+    canvas: HTMLCanvasElement;
 
     constructor() {
-        const canvas = document.createElement('canvas');
-        this.gl = canvas.getContext('webgl2');
+        this.canvas = document.createElement('canvas');
+        this.gl = this.canvas.getContext('webgl2');
 
-        canvas.width = this.width;
-        canvas.height = this.height;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
 
-        document.body.appendChild(canvas);
+        document.body.appendChild(this.canvas);
 
         this.setUpWebGL();
 
         if(this.gl){
             this.videoRender.putGL(this.gl);
         }
+
+        document.getElementById('비디오 녹화')?.addEventListener('click',this.record.bind(this));
     }
 
     render() {
@@ -175,5 +178,59 @@ void main(){
         const viewMatrix = mat4.create();
         mat4.lookAt(viewMatrix, [0,0,2], [0,0,0],[0,1,0]);
         this.view = viewMatrix;
+    }
+
+    record() {
+        this.videoRender.play(0);
+        this.videoRender.audioRender.playAudioBuffer(0);
+        const stream = this.canvas.captureStream(60);
+        const audioMediaStream = this.videoRender.getAudioDestination();
+
+        const audioTrack = audioMediaStream?.stream.getAudioTracks();
+
+        if(!audioTrack){
+            console.error('audio Track cannot find');
+            return;
+        }
+
+        stream.addTrack(audioTrack[0]);
+
+        const mediaRecorder = new MediaRecorder(
+            stream,
+            {
+                mimeType: 'video/webm; codecs=vp8,opus'
+            }
+        );
+
+        const chunks: BlobPart[] = [];
+
+        mediaRecorder.ondataavailable = function(event){
+            if(event.data.size > 0){
+                chunks.push(event.data);
+            }
+        }
+
+        mediaRecorder.onstop = function() {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+    
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'animation_with_audio.webm';
+            document.body.appendChild(a);
+            a.click();
+    
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        };
+
+        console.log(this.videoRender.duration);
+
+        mediaRecorder.start();
+
+        setTimeout(() => {
+            mediaRecorder.stop();
+        }, this.videoRender.duration * 1000);
     }
 }

@@ -20,8 +20,6 @@ export class AudioRender {
         try{
             const arrayBuffer = await this.readFileAsArrayBuffer(file);
             this.audioBuffer = await this.decodeAudioData(arrayBuffer);
-
-            console.log('AudioBuffer:');
         }catch(e){
             console.error('Error decoding audio data: ', e);
         }
@@ -50,11 +48,11 @@ export class AudioRender {
         });
     }
 
-    playAudioBuffer() {
+    playAudioBuffer(time = 0) {
         this.source = this.audioCtx.createBufferSource();
         this.source.buffer = this.audioBuffer;
         this.source.connect(this.audioCtx.destination);
-        this.source.start(0);
+        this.source.start(time);
     }
 
     pauseAudioBuffer() {
@@ -63,5 +61,20 @@ export class AudioRender {
         }
 
         this.source?.stop();
+    }
+
+    getAudioDestination() {
+        if(!this.audioCtx || !this.source){
+            return;
+        }
+
+        this.source = this.audioCtx.createBufferSource();
+        this.source.buffer = this.audioBuffer;
+
+        const audioDestination = this.audioCtx.createMediaStreamDestination();
+        this.source.connect(audioDestination);
+        this.source.start(0);
+
+        return audioDestination;
     }
 }

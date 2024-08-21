@@ -103,8 +103,8 @@ export class VideoRenderer {
         );
     }
 
-    play(){
-        this.videoElement.currentTime = 0;
+    play(time = 0){
+        this.videoElement.currentTime = time;
         this.videoElement.play();
     }
 
@@ -121,5 +121,9 @@ export class VideoRenderer {
         this.gl.uniformMatrix4fv(modelLocation, false, this.model);
         this.bindTexture(0,program);
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    }
+
+    getAudioDestination() {
+        return this.audioRender.getAudioDestination();
     }
 }
