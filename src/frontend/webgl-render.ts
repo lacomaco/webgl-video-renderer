@@ -1,5 +1,6 @@
 import { mat4 } from 'gl-matrix';
 import { VideoRenderer } from './video-render';
+import {FontRender} from './font-render'
 
 export class WebGLRender{
     private gl: WebGL2RenderingContext | null = null;
@@ -40,16 +41,27 @@ void main(){
     fs = `#version 300 es
 precision highp float;
 uniform sampler2D video;
+uniform float alpha;
 in vec2 TexCoords;
 out vec4 FragColor;
 
 void main(){
-    FragColor = texture(video,TexCoords);
+    vec4 texColor = texture(video, TexCoords);
+
+    float adjustedAlpha = alpha * texColor.a;
+
+    FragColor = vec4(texColor.rgb,adjustedAlpha);
 }`;
 
     commonProgram: WebGLProgram | null = null;
     videoRender = new VideoRenderer();
     canvas: HTMLCanvasElement;
+
+    fontRenderer: FontRender[] = [];
+
+    playTime = 0;
+
+    isRecord = false;
 
     constructor() {
         this.canvas = document.createElement('canvas');
@@ -62,16 +74,43 @@ void main(){
 
         this.setUpWebGL();
 
-        if(this.gl){
-            this.videoRender.putGL(this.gl);
+        if(!this.gl){
+            return;
         }
 
+        
+        this.videoRender.putGL(this.gl);
+        this.fontRenderer.push(new FontRender(this.gl,0.0,0.7,1,3));
+        this.fontRenderer.push(new FontRender(this.gl,0.0,-0.7,4,7));
+
         document.getElementById('비디오 녹화')?.addEventListener('click',this.record.bind(this));
+
+        document.getElementById('text1')?.addEventListener('input',(e)=>{
+            const target = e.target as HTMLInputElement;
+            this.fontRenderer[0].putText(target.value, 54);
+        });
+
+        document.getElementById('text2')?.addEventListener('input',(e)=>{
+            const target = e.target as HTMLInputElement;
+            this.fontRenderer[1].putText(target.value, 25);
+        });
+
     }
 
-    render() {
+    render(lastTime?:number) {
         if(!this.gl || !this.commonProgram){
             return;
+        }
+
+        if(!lastTime){
+            lastTime = performance.now();
+        }
+
+        const currentTime = performance.now();
+
+        if(this.isRecord){
+            const deltaTime = (currentTime - lastTime) / 1000;
+            this.playTime += deltaTime;    
         }
 
         this.gl.clearColor(1.0,0.0,0.0,1.0);
@@ -82,13 +121,20 @@ void main(){
 
         const projectionLocation = this.gl.getUniformLocation(this.commonProgram, 'projection');
         const viewLocation = this.gl.getUniformLocation(this.commonProgram, 'view');
+        const alpha = this.gl.getUniformLocation(this.commonProgram,'alpha');
 
         this.gl.uniformMatrix4fv(projectionLocation, false, this.projection);
         this.gl.uniformMatrix4fv(viewLocation, false, this.view);
+        this.gl.uniform1f(alpha,1.0);
 
         this.videoRender.render(this.commonProgram);
 
-        requestAnimationFrame(this.render.bind(this));
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+        this.fontRenderer[0].render(this.commonProgram,600,800,this.playTime);
+        this.fontRenderer[1].render(this.commonProgram,600,800,this.playTime);
+
+        requestAnimationFrame(this.render.bind(this, currentTime));
     }
 
     private setUpWebGL(): void {
@@ -225,11 +271,11 @@ void main(){
             document.body.removeChild(a);
         };
 
-        console.log(this.videoRender.duration);
-
         mediaRecorder.start();
+        this.isRecord = true;
 
         setTimeout(() => {
+            this.isRecord = false;
             mediaRecorder.stop();
         }, this.videoRender.duration * 1000);
     }
