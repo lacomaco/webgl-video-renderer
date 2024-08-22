@@ -2,6 +2,30 @@ import { mat4 } from 'gl-matrix';
 import { VideoRenderer } from './video-render';
 import {FontRender} from './font-render'
 
+const mainFrameVS = `#version 300 es
+layout (location = 0) in vec4 aPos;
+layout (location = 1) in vec2 aTexCoords;
+out vec2 TexCoords;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform mat4 model;
+
+void main(){
+    TexCoords = aTexCoords;
+    gl_Position = aPos;
+}`;
+
+const mainFrameFS = `#version 300 es
+precision highp float;
+uniform sampler2D img;
+in vec2 TexCoords;
+out vec4 FragColor;
+
+void main(){
+    FragColor = texture(img,TexCoords);
+}`;
+
 export class WebGLRender{
     private gl: WebGL2RenderingContext | null = null;
     width = 600;
@@ -54,6 +78,7 @@ void main(){
 }`;
 
     commonProgram: WebGLProgram | null = null;
+    postProcessingProgram: WebGLProgram | null = null;
     videoRender = new VideoRenderer();
     canvas: HTMLCanvasElement;
 
@@ -62,11 +87,12 @@ void main(){
     playTime = 0;
 
     isRecord = false;
-
+    framebuffer: WebGLFramebuffer | null = null;
+    offScreenTexture: WebGLTexture | null = null;
+    intermediateTexture: WebGLTexture | null = null;
     constructor() {
         this.canvas = document.createElement('canvas');
         this.gl = this.canvas.getContext('webgl2');
-
         this.canvas.width = this.width;
         this.canvas.height = this.height;
 
@@ -76,6 +102,34 @@ void main(){
 
         if(!this.gl){
             return;
+        }
+
+        this.framebuffer = this.gl.createFramebuffer();
+        this.offScreenTexture = this.gl.createTexture();
+
+        
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.offScreenTexture);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.width, this.height, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null);
+        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.offScreenTexture, 0);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER,null);
+
+        this.intermediateTexture = this.gl.createTexture();
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.intermediateTexture);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+            this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.width, this.height, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null); 
+        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+
+        if(this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER) !== this.gl.FRAMEBUFFER_COMPLETE){
+            console.error('Frame buffer cannot created');
         }
 
         
@@ -98,7 +152,7 @@ void main(){
     }
 
     render(lastTime?:number) {
-        if(!this.gl || !this.commonProgram){
+        if(!this.gl || !this.commonProgram || !this.postProcessingProgram){
             return;
         }
 
@@ -113,6 +167,7 @@ void main(){
             this.playTime += deltaTime;    
         }
 
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
         this.gl.clearColor(1.0,0.0,0.0,1.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
@@ -133,6 +188,20 @@ void main(){
         this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
         this.fontRenderer[0].render(this.commonProgram,600,800,this.playTime);
         this.fontRenderer[1].render(this.commonProgram,600,800,this.playTime);
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.intermediateTexture);
+        this.gl.copyTexImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 0, 0, this.width, this.height, 0);
+        this.gl.bindTexture(this.gl.TEXTURE_2D,null);
+
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER,null);
+        this.gl.clearColor(1.0,0.0,0.0,1.0);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        this.gl.useProgram(this.postProcessingProgram);
+        const img = this.gl.getUniformLocation(this.postProcessingProgram,'img');
+        this.gl.activeTexture(this.gl.TEXTURE0);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.intermediateTexture);
+        this.gl.uniform1i(img,0);
+        this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
         requestAnimationFrame(this.render.bind(this, currentTime));
     }
@@ -169,6 +238,21 @@ void main(){
             console.error(this.gl.getProgramInfoLog(this.commonProgram));
             return;
         }
+        
+        // post 프로세싱 프로그램 생성
+        const postVSShader = this.createShader(mainFrameVS,this.gl.VERTEX_SHADER,this.gl);
+        const postFSShader = this.createShader(mainFrameFS,this.gl.FRAGMENT_SHADER,this.gl);
+        this.postProcessingProgram = this.gl.createProgram();
+        if(!this.postProcessingProgram || !postVSShader || !postFSShader){
+            console.error('포스트 프로세스 프로그램 생성 실패!!!!');
+            return;
+        }
+        this.gl.attachShader(this.postProcessingProgram,postVSShader);
+        this.gl.attachShader(this.postProcessingProgram,postFSShader);
+        this.gl.linkProgram(this.postProcessingProgram);
+        this.gl.deleteShader(postVSShader);
+        this.gl.deleteShader(postFSShader);
+        // post 프로세싱 프로그램 생성 종료
 
         this.vao = this.gl.createVertexArray();
         this.vbo = this.gl.createBuffer();
